@@ -9,11 +9,31 @@
     <%= f.text_field :from %>
   </p>
 
+  <% if !current_user.nil? && current_user.agent? %>
+    <p>
+      <% blank = @email_addresses.count == 0 ? EmailAddress.default_email : nil %>
+      <%= f.label :to_email_address_id, t('activerecord.attributes.ticket.to'), class: 'ptm' %>
+      <%= f.collection_select :to_email_address_id, @email_addresses, :id, :formatted,
+          include_blank: blank, label: false %>
+    </p>
+  <% end %>
+
   <p>
     <%= f.text_field :subject %>
   </p>
   <p>
-    <%= f.text_area :content, class: ('tinymce' if type == 'html') %>
+    <%
+      content = ''
+      unless current_user.nil?
+        if current_user.prefer_plain_text?
+          content = "\n#{html_to_text current_user.signature}"
+        else
+          content = "<p></p>#{current_user.signature}"
+        end
+      end
+    %>
+    <%= f.text_area :content, class: ('tinymce' if type == 'html'),
+        value: (f.object.content.nil? ? content : f.object.content) %>
   </p>
 
   <%= render 'attachments/form', f: f %>

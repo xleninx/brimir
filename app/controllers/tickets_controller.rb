@@ -21,10 +21,9 @@ class TicketsController < ApplicationController
   before_filter :authenticate_user!, except: [:create, :new]
   load_and_authorize_resource :ticket, except: :create
   skip_authorization_check only: :create
-  skip_before_action :verify_authenticity_token, only: :create, if: 'request.format.json?'
 
-  # this is needed for brimir integration in other sites
-  before_filter :allow_cors, only: [:create, :new]
+  # allow ticket creation using json posts
+  skip_before_action :verify_authenticity_token, only: :create, if: 'request.format.json?'
 
   def show
     @agents = User.agents
@@ -34,10 +33,15 @@ class TicketsController < ApplicationController
         .where(draft: true)
         .first
 
+    @replies = @ticket.replies.chronologically.without_drafts.select do |reply|
+      can? :show, reply
+    end
+
     if draft.present?
       @reply = draft
     else
       @reply = @ticket.replies.new(user: current_user)
+      @reply.reply_to = @replies.select{ |r| !r.internal? }.last || @ticket
       @reply.set_default_notifications!
     end
 
@@ -123,25 +127,13 @@ class TicketsController < ApplicationController
   end
 
   def new
-    unless current_user.blank?
-      if current_user.prefer_plain_text?
-        signature = { content: "\n#{html_to_text current_user.signature}" }
-      else
-        signature = { content: "<p></p>#{current_user.signature}" }
-      end
-    else
-      signature = {}
-    end
-
-    unless params[:ticket].nil? # prefill params given?
-      @ticket = Ticket.new(signature.merge(ticket_params))
-    else
-      @ticket = Ticket.new(signature)
-    end
+    @ticket = Ticket.new
 
     unless current_user.nil?
       @ticket.user = current_user
     end
+
+    @email_addresses = EmailAddress.verified.ordered
   end
 
   def create
@@ -152,28 +144,7 @@ class TicketsController < ApplicationController
     end
 
     if !@ticket.nil? && @ticket.save
-
-      Rule.apply_all(@ticket) unless @ticket.is_a?(Reply)
-
-      # where user notifications added?
-      if @ticket.notified_users.count == 0
-        @ticket.set_default_notifications!
-      end
-
-      # @ticket might be a Reply when via json post
-      if @ticket.is_a?(Ticket)
-        if @ticket.assignee.nil?
-          @ticket.notified_users.each do |user|
-            mail = NotificationMailer.new_ticket(@ticket, user)
-            mail.deliver_now unless EmailAddress.pluck(:email).include?(user.email)
-            @ticket.message_id = mail.message_id
-          end
-
-          @ticket.save
-        else
-          NotificationMailer.assigned(@ticket).deliver_now
-        end
-      end
+      NotificationMailer.incoming_message(@ticket, params[:message])
     end
 
     respond_to do |format|
@@ -182,16 +153,13 @@ class TicketsController < ApplicationController
         if !@ticket.nil? && @ticket.valid?
 
           if current_user.nil?
-            if request.xhr?
-              return render I18n.translate(:ticket_added)
-            else
-              render 'create'
-            end
+            render 'create'
           else
             redirect_to ticket_url(@ticket), notice: I18n::translate(:ticket_added)
           end
 
         else
+          @email_addresses = EmailAddress.verified.ordered
           render 'new'
         end
 
@@ -216,6 +184,7 @@ class TicketsController < ApplicationController
       if !current_user.nil? && current_user.agent?
         params.require(:ticket).permit(
             :from,
+            :to_email_address_id,
             :content,
             :subject,
             :status,
@@ -238,14 +207,4 @@ class TicketsController < ApplicationController
             ])
       end
     end
-
-    def allow_cors
-      headers['Access-Control-Allow-Origin'] = '*'
-      headers['Access-Control-Allow-Methods'] = 'GET,POST'
-      headers['Access-Control-Allow-Headers'] =
-          %w{Origin Accept Content-Type X-Requested-With X-CSRF-Token}.join(',')
-
-      head :ok if request.request_method == 'OPTIONS'
-    end
-
 end

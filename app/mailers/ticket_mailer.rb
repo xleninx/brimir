@@ -51,7 +51,11 @@ class TicketMailer < ActionMailer::Base
       else
         content = encode(email.body.decoded)
       end
-      content_type = 'text'
+      if email.content_type.include? 'html'
+        content_type = 'html'
+      else
+        content_type = 'text'
+      end
     end
 
     if email.charset
@@ -59,7 +63,6 @@ class TicketMailer < ActionMailer::Base
     else
       subject = email.subject.to_s.encode('UTF-8')
     end
-
 
     if email.in_reply_to
       # is this a reply to a ticket or to another reply?
@@ -96,12 +99,15 @@ class TicketMailer < ActionMailer::Base
         from: from_address,
         message_id: email.message_id,
         content_type: content_type,
-        raw_message: StringIO.new(email.to_s)
+        raw_message: StringIO.new(email.to_s),
+        reply_to_id: response_to.try(:id),
+        reply_to_type: response_to.try(:class).try(:name)
       })
 
     else
 
-      to_email_address = EmailAddress.find_first_verified_email(email.to)
+      to_email_address = EmailAddress.find_first_verified_email(
+          email.to.to_a + email.cc.to_a + email.bcc.to_a)
 
       # add new ticket
       ticket = Ticket.create({
@@ -141,18 +147,6 @@ class TicketMailer < ActionMailer::Base
             content_id: content_id)
       end
 
-    end
-
-    if ticket != incoming
-      incoming.set_default_notifications!
-
-      incoming.notified_users.each do |user|
-        mail = NotificationMailer.new_reply(incoming, user)
-        mail.deliver_now
-        incoming.message_id = mail.message_id
-      end
-
-      incoming.save
     end
 
     if bounced?(email)

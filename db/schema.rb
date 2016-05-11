@@ -11,7 +11,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema.define(version: 20150915063710) do
+ActiveRecord::Schema.define(version: 20151113142834) do
 
   create_table "attachments", force: :cascade do |t|
     t.integer  "attachable_id"
@@ -83,11 +83,12 @@ ActiveRecord::Schema.define(version: 20150915063710) do
     t.integer  "user_id"
     t.string   "message_id"
     t.string   "content_type",                                default: "html"
+    t.boolean  "draft",                                       default: false,  null: false
     t.string   "raw_message_file_name"
     t.string   "raw_message_content_type"
     t.integer  "raw_message_file_size"
     t.datetime "raw_message_updated_at"
-    t.boolean  "draft",                                       default: false,  null: false
+    t.boolean  "internal",                                    default: false,  null: false
   end
 
   add_index "replies", ["message_id"], name: "index_replies_on_message_id"
@@ -173,6 +174,7 @@ ActiveRecord::Schema.define(version: 20150915063710) do
     t.integer  "per_page",               default: 30,    null: false
     t.string   "locale"
     t.boolean  "prefer_plain_text",      default: false, null: false
+    t.boolean  "include_quote_in_reply", default: true,  null: false
   end
 
   add_index "users", ["email"], name: "index_users_on_email", unique: true

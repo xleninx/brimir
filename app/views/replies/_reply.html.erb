@@ -1,4 +1,4 @@
-<ul class="accordion" data-accordion>
+<ul class="accordion <%= 'internal-reply' if reply.internal? %>" data-accordion>
   <li class="accordion-navigation <%= div_class %>">
     <a href="#reply-<%=reply.id%>" class="bb text-default">
       <div class="row collapse">
@@ -26,7 +26,7 @@
         <% if reply.content_type == 'html' %>
           <%= sanitize_html(reply.content, reply.inline_files) %>
         <% else %>
-          <pre><%= reply.content %></pre>
+          <pre><%= word_wrap(reply.content, line_width: 72) %></pre>
         <% end %>
 
 

@@ -167,6 +167,9 @@ class TicketsControllerTest < ActionController::TestCase
     # should have selected same outgoing address as original received
     assert_select 'option[selected="selected"]' +
         "[value=\"#{email_addresses(:brimir).id}\"]"
+
+    # should contain this for internal note switch
+    assert_select '[data-notified-users]'
   end
 
   test 'should email assignee if ticket is assigned by somebody else' do
@@ -287,18 +290,6 @@ class TicketsControllerTest < ActionController::TestCase
     tickets = assigns(:tickets)
     assert_equal tickets.pluck(:id).uniq, tickets.pluck(:id)
 
-  end
-
-  test 'should allow CORS' do
-    [:new, :create].each do |action|
-      process(action, 'OPTIONS')
-
-      assert_response :ok
-      assert_equal '*', response.headers['Access-Control-Allow-Origin']
-      assert_equal 'GET,POST', response.headers['Access-Control-Allow-Methods']
-      assert_equal 'Origin,Accept,Content-Type,X-Requested-With,X-CSRF-Token', 
-          response.headers['Access-Control-Allow-Headers']
-    end
   end
 
   test 'should not notify when a bounce message is received' do
